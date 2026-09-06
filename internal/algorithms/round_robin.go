@@ -1,38 +1,31 @@
 package algorithms
 
 import (
-	"sync"
-
 	"github.com/tejasmcodes/high-performance-request-system/internal/models"
+	"sync"
 )
 
-// RoundRobin cycles through the server list in order, skipping any
-// server that isn't Healthy. State (current) is shared across every
-// incoming request's goroutine, so it's protected by a mutex.
 type RoundRobin struct {
-	current int
 	mu      sync.Mutex
+	current int
 }
 
-// NextServer implements the Strategy interface.
-func (r *RoundRobin) NextServer(servers []*models.Server) *models.Server {
+func (rr *RoundRobin) NextServer(servers []*models.Server) *models.Server {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+
 	if len(servers) == 0 {
 		return nil
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	for i := 0; i < len(servers); i++ {
-		idx := r.current % len(servers)
-		r.current++
-		if servers[idx].Healthy {
-			return servers[idx]
+		index := (rr.current + i) % len(servers)
+
+		if servers[index].Healthy {
+			rr.current = (index + 1) % len(servers)
+			return servers[index]
 		}
 	}
 
 	return nil
 }
-
-// compile-time check: RoundRobin must satisfy Strategy
-var _ Strategy = (*RoundRobin)(nil)
