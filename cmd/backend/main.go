@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 func main() {
@@ -16,6 +18,11 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		delay, err := strconv.Atoi(r.URL.Query().Get("delay"))
+
+		if err == nil && delay > 0{
+			time.Sleep(time.Duration(delay)*time.Second)
+		}
 		fmt.Fprintf(w, "Hello from %s\n", *id)
 	})
 

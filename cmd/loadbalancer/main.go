@@ -17,7 +17,7 @@ func main() {
 		{ID: "backend-3", URL: "http://localhost:8083", Healthy: true},
 	}
 
-	strategy := &algorithms.RoundRobin{}
+	strategy := &algorithms.LeastConnections{}
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		server := strategy.NextServer(servers)
@@ -26,6 +26,9 @@ func main() {
 			http.Error(w, "no healthy backend available", http.StatusServiceUnavailable)
 			return
 		}
+
+		server.IncrementConnections()
+    	defer server.DecrementConnections()
 
 		target, err := url.Parse(server.URL)
 		if err != nil {
