@@ -12,12 +12,12 @@ import (
 
 func main() {
 	servers := []*models.Server{
-		{ID: "backend-1", URL: "http://localhost:8081", Healthy: true},
-		{ID: "backend-2", URL: "http://localhost:8082", Healthy: true},
-		{ID: "backend-3", URL: "http://localhost:8083", Healthy: true},
+		{ID: "backend-1", URL: "http://localhost:8081", Weight: 3, Healthy: true},
+		{ID: "backend-2", URL: "http://localhost:8082", Weight: 1, Healthy: true},
+		{ID: "backend-3", URL: "http://localhost:8083", Weight: 2, Healthy: true},
 	}
 
-	strategy := &algorithms.LeastConnections{}
+	strategy := &algorithms.WeightedRoundRobin{}
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		server := strategy.NextServer(servers)
