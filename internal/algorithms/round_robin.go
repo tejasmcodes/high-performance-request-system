@@ -18,7 +18,7 @@ func (rr *RoundRobin) NextServer(servers []*models.Server) *models.Server {
 		return nil
 	}
 
-	for i := 0; i < len(servers); i++ {
+	for i := range servers {
 		index := (rr.current + i) % len(servers)
 
 		if servers[index].Healthy {
