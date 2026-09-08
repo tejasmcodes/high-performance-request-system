@@ -22,7 +22,7 @@ func (wrr *WeightedRoundRobin) NextServer(servers []*models.Server) *models.Serv
 	totalWeight := 0
 
 	for _, server := range servers {
-		if !server.Healthy {
+		if !server.IsHealthy() {
 			continue
 		}
 
@@ -41,7 +41,7 @@ func (wrr *WeightedRoundRobin) NextServer(servers []*models.Server) *models.Serv
 	position := 0
 
 	for _, server := range servers {
-		if !server.Healthy || server.Weight <= 0 {
+		if !server.IsHealthy() || server.Weight <= 0 {
 			continue
 		}
 
