@@ -8,13 +8,13 @@ func (lc *LeastConnections) NextServer(servers []*models.Server) *models.Server 
 	var selected *models.Server
 
 	for _, server := range servers {
-		if !server.Healthy {
+		if !server.IsHealthy() {
 			continue
 		}
 
-		if selected == nil{
+		if selected == nil {
 			selected = server
-		} else if server.ActiveConnections() < selected.ActiveConnections(){
+		} else if server.ActiveConnections() < selected.ActiveConnections() {
 			selected = server
 		}
 	}

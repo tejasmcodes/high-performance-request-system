@@ -13,7 +13,7 @@ type Server struct {
 	mu sync.Mutex
 }
 
-func(s *Server) ActiveConnections() int{
+func (s *Server) ActiveConnections() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -21,20 +21,31 @@ func(s *Server) ActiveConnections() int{
 
 }
 
-func(s *Server) IncrementConnections(){
+func (s *Server) IncrementConnections() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.activeConnections++
 }
 
-
-func(s *Server) DecrementConnections(){
+func (s *Server) DecrementConnections() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.activeConnections > 0{
+	if s.activeConnections > 0 {
 		s.activeConnections--
 	}
-	
+
+}
+
+func (s *Server) IsHealthy() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Healthy
+}
+
+func (s *Server) SetHealthy(healthy bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Healthy = healthy
 }
