@@ -15,41 +15,34 @@ func (wrr *WeightedRoundRobin) NextServer(servers []*models.Server) *models.Serv
 	wrr.mu.Lock()
 	defer wrr.mu.Unlock()
 
-	if len(servers) == 0 {
+	var healthy []*models.Server
+
+	for _, server := range servers {
+		if server.IsHealthy() && server.Weight > 0 {
+			healthy = append(healthy, server)
+		}
+	}
+
+	if len(healthy) == 0 {
 		return nil
 	}
 
 	totalWeight := 0
-
-	for _, server := range servers {
-		if !server.IsHealthy() {
-			continue
-		}
-
-		if server.Weight <= 0 {
-			continue
-		}
-
+	for _, server := range healthy {
 		totalWeight += server.Weight
 	}
 
-	if totalWeight == 0 {
-		return nil
-	}
+	wrr.current %= totalWeight
 
-	wrr.current = wrr.current % totalWeight
 	position := 0
 
-	for _, server := range servers {
-		if !server.IsHealthy() || server.Weight <= 0 {
-			continue
-		}
-
+	for _, server := range healthy {
 		position += server.Weight
-		if wrr.current < position {
-			wrr.current++
 
-			return server
+		if wrr.current < position {
+			selected := server
+			wrr.current++
+			return selected
 		}
 	}
 

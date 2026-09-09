@@ -11,6 +11,7 @@ import (
 	"github.com/tejasmcodes/high-performance-request-system/internal/algorithms"
 	"github.com/tejasmcodes/high-performance-request-system/internal/health"
 	"github.com/tejasmcodes/high-performance-request-system/internal/models"
+	"github.com/tejasmcodes/high-performance-request-system/internal/metrics"
 )
 
 func main() {
@@ -26,6 +27,21 @@ func main() {
 	checker := health.NewHealthChecker(servers)
 	go checker.Start(ctx)
 
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			cpu, err := metrics.CPUUtilization()
+			if err != nil {
+				log.Printf("CPU utilization error: %v", err)
+				continue
+			}
+
+			log.Printf("CPU utilization: %.2f%%", cpu)
+		}
+	}()
+
 	strategy := &algorithms.WeightedRoundRobin{}
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +51,8 @@ func main() {
 			http.Error(w, "no healthy backend available", http.StatusServiceUnavailable)
 			return
 		}
+
+		log.Printf("selected backend=%s", server.ID)
 
 		server.IncrementConnections()
 		defer server.DecrementConnections()
