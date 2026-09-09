@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"time"
 
 	"github.com/tejasmcodes/high-performance-request-system/internal/algorithms"
 	"github.com/tejasmcodes/high-performance-request-system/internal/health"
@@ -17,10 +18,10 @@ func main() {
 	defer cancel()
 
 	servers := []*models.Server{
-		{ID: "backend-1", URL: "http://localhost:8081", Weight: 3, Healthy: true},
-		{ID: "backend-2", URL: "http://localhost:8082", Weight: 1, Healthy: true},
-		{ID: "backend-3", URL: "http://localhost:8083", Weight: 2, Healthy: true},
-	}
+		models.NewServer("backend-1", "http://localhost:8081", 3),
+		models.NewServer("backend-2", "http://localhost:8082", 1),
+		models.NewServer("backend-3", "http://localhost:8083", 2),
+		}
 
 	checker := health.NewHealthChecker(servers)
 	go checker.Start(ctx)
@@ -45,7 +46,18 @@ func main() {
 		}
 
 		proxy := httputil.NewSingleHostReverseProxy(target)
+
+		start := time.Now()
+
 		proxy.ServeHTTP(w, r)
+
+		elapsed := time.Since(start)
+		server.ObserveResponseTime(elapsed)
+		log.Printf(
+			"backend=%s response_time=%.2fms",
+			server.ID,
+			server.ResponseTime(),
+		)
 	}
 
 	log.Println("load balancer listening on :8080")
