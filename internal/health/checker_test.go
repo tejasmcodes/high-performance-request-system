@@ -1,11 +1,11 @@
 package health
 
 import (
-	"testing"
-	"net/http"
-	"time"
-	"net/http/httptest"
 	"github.com/tejasmcodes/high-performance-request-system/internal/models"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
 )
 
 func TestCheckServerHealthy(t *testing.T) {
@@ -38,15 +38,14 @@ func TestCheckServerUnhealthy(t *testing.T) {
 	}
 }
 
-
 func TestCheckAllConcurrent(t *testing.T) {
-    testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        time.Sleep(1 * time.Second)
-        w.WriteHeader(http.StatusOK)
-    }))
-    defer testServer.Close()
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(1 * time.Second)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testServer.Close()
 
-    servers := []*models.Server{
+	servers := []*models.Server{
 		{
 			ID:      "backend-1",
 			URL:     testServer.URL,
@@ -69,5 +68,5 @@ func TestCheckAllConcurrent(t *testing.T) {
 	checker.CheckAll()
 	elapsed := time.Since(start)
 
-	t.Logf("checkAll too %v",elapsed)
+	t.Logf("checkAll took %v", elapsed)
 }
