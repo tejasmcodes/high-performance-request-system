@@ -13,6 +13,7 @@ type Server struct {
 	Weight            int
 	Healthy           bool
 	activeConnections int
+	cpuUtilization    float64
 	responseTime      *metrics.ResponseTime
 
 	mu sync.Mutex
@@ -63,6 +64,18 @@ func (s *Server) SetHealthy(healthy bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Healthy = healthy
+}
+
+func (s *Server) CPUUtilization() float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cpuUtilization
+}
+
+func (s *Server) SetCPUUtilization(cpu float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cpuUtilization = cpu
 }
 
 func (s *Server) ObserveResponseTime(duration time.Duration) {
