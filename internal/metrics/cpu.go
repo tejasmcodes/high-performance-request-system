@@ -1,68 +1,63 @@
 package metrics
 
 import (
-	"bufio"
+	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 )
 
-func readCPU() (idle, total uint64, err error) {
-	file, err := os.Open("/proc/stat")
+const cpuSampleWindow = 500 * time.Millisecond
+
+func readProcessCPUTime() (uint64, error) {
+	data, err := os.ReadFile("/proc/self/schedstat")
 	if err != nil {
-		return 0, 0, err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
-	if !scanner.Scan() {
-		return 0, 0, scanner.Err()
+		return 0, err
 	}
 
-	fields := strings.Fields(scanner.Text())
-
-	// cpu user nice system idle iowait irq softirq steal ...
-	if len(fields) < 5 || fields[0] != "cpu" {
-		return 0, 0, nil
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return 0, fmt.Errorf("unexpected /proc/self/schedstat format")
 	}
 
-	for _, field := range fields[1:] {
-		value, err := strconv.ParseUint(field, 10, 64)
-		if err != nil {
-			return 0, 0, err
-		}
-		total += value
-	}
-
-	idle, err = strconv.ParseUint(fields[4], 10, 64)
+	cpuNanoseconds, err := strconv.ParseUint(fields[0], 10, 64)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 
-	return idle, total, nil
+	return cpuNanoseconds, nil
 }
 
-func CPUUtilization() (float64, error) {
-	idle1, total1, err := readCPU()
+func ProcessCPUUtilization() (float64, error) {
+	start := time.Now()
+
+	before, err := readProcessCPUTime()
 	if err != nil {
 		return 0, err
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(cpuSampleWindow)
 
-	idle2, total2, err := readCPU()
+	after, err := readProcessCPUTime()
 	if err != nil {
 		return 0, err
 	}
 
-	totalDelta := total2 - total1
-	idleDelta := idle2 - idle1
-
-	if totalDelta == 0 {
+	elapsed := time.Since(start).Nanoseconds()
+	if elapsed <= 0 {
 		return 0, nil
 	}
 
-	return (1 - float64(idleDelta)/float64(totalDelta)) * 100, nil
+	if after < before {
+		return 0, fmt.Errorf("process CPU time went backwards")
+	}
+
+	cores := runtime.NumCPU()
+	if cores <= 0 {
+		cores = 1
+	}
+
+	return float64(after-before) / float64(elapsed) / float64(cores) * 100, nil
 }

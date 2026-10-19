@@ -11,7 +11,7 @@ import (
 	"github.com/tejasmcodes/high-performance-request-system/internal/algorithms"
 	"github.com/tejasmcodes/high-performance-request-system/internal/health"
 	"github.com/tejasmcodes/high-performance-request-system/internal/models"
-	"github.com/tejasmcodes/high-performance-request-system/internal/metrics"
+	"github.com/tejasmcodes/high-performance-request-system/internal/monitor"
 )
 
 func main() {
@@ -22,25 +22,13 @@ func main() {
 		models.NewServer("backend-1", "http://localhost:8081", 3),
 		models.NewServer("backend-2", "http://localhost:8082", 1),
 		models.NewServer("backend-3", "http://localhost:8083", 2),
-		}
+	}
 
 	checker := health.NewHealthChecker(servers)
 	go checker.Start(ctx)
 
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			cpu, err := metrics.CPUUtilization()
-			if err != nil {
-				log.Printf("CPU utilization error: %v", err)
-				continue
-			}
-
-			log.Printf("CPU utilization: %.2f%%", cpu)
-		}
-	}()
+	collector := monitor.NewCPUCollector(servers)
+	go collector.Start(ctx, 5*time.Second)
 
 	strategy := &algorithms.WeightedRoundRobin{}
 
