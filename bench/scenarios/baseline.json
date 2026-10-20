@@ -1,0 +1,19 @@
+{
+  "name": "baseline",
+  "description": "All backends have approximately equal latency",
+  "lb_addr": ":18080",
+  "backends": [
+    { "id": "backend-1", "port": 18081, "weight": 3, "latency_ms": 20 },
+    { "id": "backend-2", "port": 18082, "weight": 1, "latency_ms": 20 },
+    { "id": "backend-3", "port": 18083, "weight": 2, "latency_ms": 20 }
+  ],
+  "phases": [],
+  "load": {
+    "warmup_s": 5,
+    "duration_s": 30,
+    "concurrency": 32,
+    "rate_per_second": 300
+  },
+  "strategies": ["round-robin", "least-connections", "weighted-round-robin", "adaptive"],
+  "repeats": 5
+}

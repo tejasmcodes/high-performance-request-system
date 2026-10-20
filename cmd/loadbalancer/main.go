@@ -30,7 +30,7 @@ func main() {
 	collector := monitor.NewCPUCollector(servers)
 	go collector.Start(ctx, 5*time.Second)
 
-	strategy := &algorithms.WeightedRoundRobin{}
+	strategy := algorithms.NewAdaptive(algorithms.DefaultAdaptiveConfig())
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		server := strategy.NextServer(servers)

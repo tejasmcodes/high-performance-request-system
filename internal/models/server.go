@@ -14,6 +14,7 @@ type Server struct {
 	Healthy           bool
 	activeConnections int
 	cpuUtilization    float64
+	cpuUpdatedAt      time.Time
 	responseTime      *metrics.ResponseTime
 
 	mu sync.Mutex
@@ -76,6 +77,13 @@ func (s *Server) SetCPUUtilization(cpu float64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cpuUtilization = cpu
+	s.cpuUpdatedAt = time.Now()
+}
+
+func (s *Server) CPUUpdatedAt() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cpuUpdatedAt
 }
 
 func (s *Server) ObserveResponseTime(duration time.Duration) {
@@ -84,4 +92,8 @@ func (s *Server) ObserveResponseTime(duration time.Duration) {
 
 func (s *Server) ResponseTime() float64 {
 	return s.responseTime.Value()
+}
+
+func (s *Server) ResponseTimeSamples() int64 {
+	return s.responseTime.Count()
 }
