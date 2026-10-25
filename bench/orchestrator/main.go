@@ -106,6 +106,7 @@ func main() {
 
 func runOnce(sc *scenario.Scenario, strategy string, repeat int, backendBin, lbBin, resultsDir string, cpuSets []string) (*workload.Result, error) {
 	logPath := filepath.Join(resultsDir, fmt.Sprintf("%s_%s_run%d.log", sc.Name, strategy, repeat))
+	decisionLogPath := decisionLogPath(resultsDir, sc.Name, strategy, repeat)
 
 	var procs []*process
 	defer func() {
@@ -141,13 +142,7 @@ func runOnce(sc *scenario.Scenario, strategy string, repeat int, backendBin, lbB
 		}
 	}
 
-	lbArgs := []string{
-		"-algorithm", strategy,
-		"-addr", sc.LBAddr,
-		"-ids", strings.Join(sc.IDs(), ","),
-		"-urls", strings.Join(sc.URLs(), ","),
-		"-weights", scenario.JoinInts(weights(sc)),
-	}
+	lbArgs := loadBalancerArgs(sc, strategy, decisionLogPath)
 
 	lbProc, err := startProcess(lbBin, lbArgs, logPath)
 	if err != nil {
@@ -183,6 +178,21 @@ func runOnce(sc *scenario.Scenario, strategy string, repeat int, backendBin, lbB
 	}
 
 	return result, nil
+}
+
+func decisionLogPath(resultsDir, scenarioName, strategy string, run int) string {
+	return filepath.Join(resultsDir, fmt.Sprintf("%s_%s_run%d_decisions.jsonl", scenarioName, strategy, run))
+}
+
+func loadBalancerArgs(sc *scenario.Scenario, strategy, decisionLogPath string) []string {
+	return []string{
+		"-algorithm", strategy,
+		"-addr", sc.LBAddr,
+		"-ids", strings.Join(sc.IDs(), ","),
+		"-urls", strings.Join(sc.URLs(), ","),
+		"-weights", scenario.JoinInts(weights(sc)),
+		"-decision-log", decisionLogPath,
+	}
 }
 
 func runPhases(ctx context.Context, sc *scenario.Scenario, start time.Time) {
