@@ -9,31 +9,34 @@ import (
 )
 
 const (
-	defaultConnectionsWeight  = 0.45
-	defaultResponseTimeWeight = 0.40
-	defaultCPUWeight          = 0.15
-	defaultMissingMetricScore = 0.5
-	defaultCPUStaleAfter      = 15 * time.Second
-	defaultScoreEpsilon       = 1e-6
+	defaultConnectionsWeight      = 0.45
+	defaultResponseTimeWeight     = 0.40
+	defaultCPUWeight              = 0.15
+	defaultMissingMetricScore     = 0.5
+	defaultCPUStaleAfter          = 15 * time.Second
+	defaultResponseTimeStaleAfter = 15 * time.Second
+	defaultScoreEpsilon           = 1e-6
 )
 
 type AdaptiveConfig struct {
-	ConnectionsWeight  float64
-	ResponseTimeWeight float64
-	CPUWeight          float64
-	MissingMetricScore float64
-	CPUStaleAfter      time.Duration
-	ScoreEpsilon       float64
+	ConnectionsWeight      float64
+	ResponseTimeWeight     float64
+	CPUWeight              float64
+	MissingMetricScore     float64
+	CPUStaleAfter          time.Duration
+	ResponseTimeStaleAfter time.Duration
+	ScoreEpsilon           float64
 }
 
 func DefaultAdaptiveConfig() AdaptiveConfig {
 	return AdaptiveConfig{
-		ConnectionsWeight:  defaultConnectionsWeight,
-		ResponseTimeWeight: defaultResponseTimeWeight,
-		CPUWeight:          defaultCPUWeight,
-		MissingMetricScore: defaultMissingMetricScore,
-		CPUStaleAfter:      defaultCPUStaleAfter,
-		ScoreEpsilon:       defaultScoreEpsilon,
+		ConnectionsWeight:      defaultConnectionsWeight,
+		ResponseTimeWeight:     defaultResponseTimeWeight,
+		CPUWeight:              defaultCPUWeight,
+		MissingMetricScore:     defaultMissingMetricScore,
+		CPUStaleAfter:          defaultCPUStaleAfter,
+		ResponseTimeStaleAfter: defaultResponseTimeStaleAfter,
+		ScoreEpsilon:           defaultScoreEpsilon,
 	}
 }
 
@@ -77,8 +80,7 @@ func (a *Adaptive) NextServer(servers []*models.Server) *models.Server {
 			continue
 		}
 
-		response := server.ResponseTime()
-		responseSamples := server.ResponseTimeSamples()
+		response, responseSamples, responseUpdatedAt := server.ResponseTimeSnapshot()
 		cpu := server.CPUUtilization()
 		cpuUpdatedAt := server.CPUUpdatedAt()
 
@@ -88,7 +90,7 @@ func (a *Adaptive) NextServer(servers []*models.Server) *models.Server {
 			weight:      server.Weight,
 			connections: server.ActiveConnections(),
 			response:    response,
-			responseOK:  responseSamples > 0 && isFinite(response) && response >= 0,
+			responseOK:  isFreshResponseTime(response, responseSamples, responseUpdatedAt, now, a.cfg.ResponseTimeStaleAfter),
 			cpu:         cpu,
 			cpuOK:       isFreshCPU(cpu, cpuUpdatedAt, now, a.cfg.CPUStaleAfter),
 		})
@@ -98,7 +100,7 @@ func (a *Adaptive) NextServer(servers []*models.Server) *models.Server {
 		return nil
 	}
 
-	connMin := float64(candidates[0].connections)
+	connMin := capacityAdjustedConnections(candidates[0].connections, candidates[0].weight)
 	connMax := connMin
 
 	var (
@@ -108,7 +110,7 @@ func (a *Adaptive) NextServer(servers []*models.Server) *models.Server {
 	)
 
 	for _, candidate := range candidates {
-		connections := float64(candidate.connections)
+		connections := capacityAdjustedConnections(candidate.connections, candidate.weight)
 		if connections < connMin {
 			connMin = connections
 		}
@@ -138,7 +140,7 @@ func (a *Adaptive) NextServer(servers []*models.Server) *models.Server {
 	for i := range candidates {
 		candidate := &candidates[i]
 
-		connectionScore := normalizeMinMax(float64(candidate.connections), connMin, connMax)
+		connectionScore := normalizeMinMax(capacityAdjustedConnections(candidate.connections, candidate.weight), connMin, connMax)
 
 		responseScore := a.cfg.MissingMetricScore
 		if candidate.responseOK && hasResponse {
@@ -201,6 +203,22 @@ func isFreshCPU(cpu float64, updatedAt, now time.Time, staleAfter time.Duration)
 	return isFinite(cpu) && cpu >= 0 && cpu <= 100
 }
 
+func isFreshResponseTime(response float64, samples int64, updatedAt, now time.Time, staleAfter time.Duration) bool {
+	if samples == 0 || updatedAt.IsZero() || updatedAt.After(now) {
+		return false
+	}
+
+	if now.Sub(updatedAt) > staleAfter {
+		return false
+	}
+
+	return isFinite(response) && response >= 0
+}
+
+func capacityAdjustedConnections(connections, weight int) float64 {
+	return float64(connections) / float64(weight)
+}
+
 func normalizeMinMax(value, min, max float64) float64 {
 	if max <= min {
 		return 0
@@ -239,6 +257,10 @@ func sanitizeAdaptiveConfig(cfg AdaptiveConfig) AdaptiveConfig {
 
 	if cfg.CPUStaleAfter <= 0 {
 		cfg.CPUStaleAfter = defaultCPUStaleAfter
+	}
+
+	if cfg.ResponseTimeStaleAfter <= 0 {
+		cfg.ResponseTimeStaleAfter = defaultResponseTimeStaleAfter
 	}
 
 	if math.IsNaN(cfg.ScoreEpsilon) || math.IsInf(cfg.ScoreEpsilon, 0) || cfg.ScoreEpsilon < 0 {

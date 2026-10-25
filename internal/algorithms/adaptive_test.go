@@ -27,6 +27,9 @@ func TestDefaultAdaptiveConfig(t *testing.T) {
 	if cfg.CPUStaleAfter != 15*time.Second {
 		t.Fatalf("expected CPU stale threshold 15s, got %v", cfg.CPUStaleAfter)
 	}
+	if cfg.ResponseTimeStaleAfter != 15*time.Second {
+		t.Fatalf("expected response time stale threshold 15s, got %v", cfg.ResponseTimeStaleAfter)
+	}
 	if cfg.ScoreEpsilon != 1e-6 {
 		t.Fatalf("expected score epsilon 1e-6, got %g", cfg.ScoreEpsilon)
 	}
@@ -50,6 +53,75 @@ func TestAdaptiveSelectsFewestConnections(t *testing.T) {
 	}
 	if selected.ID != "backend-3" {
 		t.Fatalf("expected backend-3, got %s", selected.ID)
+	}
+}
+
+func TestAdaptiveCapacityAwareConnectionScores(t *testing.T) {
+	servers := []*models.Server{
+		newAdaptiveServer("backend-1", 3),
+		newAdaptiveServer("backend-2", 1),
+		newAdaptiveServer("backend-3", 2),
+	}
+
+	setConnections(servers[0], 6)
+	setConnections(servers[1], 3)
+	setConnections(servers[2], 2)
+
+	if got := capacityAdjustedConnections(6, 3); got != 2 {
+		t.Fatalf("expected backend-1 effective connections 2, got %f", got)
+	}
+	if got := capacityAdjustedConnections(3, 1); got != 3 {
+		t.Fatalf("expected backend-2 effective connections 3, got %f", got)
+	}
+	if got := capacityAdjustedConnections(2, 2); got != 1 {
+		t.Fatalf("expected backend-3 effective connections 1, got %f", got)
+	}
+
+	cfg := DefaultAdaptiveConfig()
+	cfg.ResponseTimeWeight = 0
+	cfg.CPUWeight = 0
+
+	selected := NewAdaptive(cfg).NextServer(servers)
+	if selected == nil {
+		t.Fatal("expected a server, got nil")
+	}
+	if selected.ID != "backend-3" {
+		t.Fatalf("expected backend-3 (lowest effective connections), got %s", selected.ID)
+	}
+}
+
+func TestAdaptiveEqualEffectiveConnectionsHaveZeroScore(t *testing.T) {
+	servers := []*models.Server{
+		newAdaptiveServer("backend-1", 3),
+		newAdaptiveServer("backend-2", 1),
+		newAdaptiveServer("backend-3", 2),
+	}
+
+	setConnections(servers[0], 3)
+	setConnections(servers[1], 1)
+	setConnections(servers[2], 2)
+
+	effectiveConnections := []float64{
+		capacityAdjustedConnections(3, 3),
+		capacityAdjustedConnections(1, 1),
+		capacityAdjustedConnections(2, 2),
+	}
+	for _, connections := range effectiveConnections {
+		if score := normalizeMinMax(connections, 1, 1); score != 0 {
+			t.Fatalf("expected zero connection score, got %f", score)
+		}
+	}
+
+	cfg := DefaultAdaptiveConfig()
+	cfg.ResponseTimeWeight = 0
+	cfg.CPUWeight = 0
+
+	selected := NewAdaptive(cfg).NextServer(servers)
+	if selected == nil {
+		t.Fatal("expected a server, got nil")
+	}
+	if selected.ID != "backend-1" {
+		t.Fatalf("expected tie-breaking to choose backend-1, got %s", selected.ID)
 	}
 }
 
@@ -198,6 +270,81 @@ func TestAdaptiveResponseTimeNormalizationIgnoresMissing(t *testing.T) {
 	}
 	if selected.ID != "backend-1" {
 		t.Fatalf("expected backend-1, got %s", selected.ID)
+	}
+}
+
+func TestAdaptiveFreshResponseTimeParticipatesInScoring(t *testing.T) {
+	servers := []*models.Server{
+		newAdaptiveServer("backend-1", 1),
+		newAdaptiveServer("backend-2", 1),
+	}
+
+	setResponseTime(servers[0], 10)
+	setResponseTime(servers[1], 20)
+
+	cfg := DefaultAdaptiveConfig()
+	cfg.ConnectionsWeight = 0
+	cfg.ResponseTimeWeight = 1
+	cfg.CPUWeight = 0
+
+	selected := NewAdaptive(cfg).NextServer(servers)
+	if selected == nil {
+		t.Fatal("expected a server, got nil")
+	}
+	if selected.ID != "backend-1" {
+		t.Fatalf("expected backend-1 with lower fresh response time, got %s", selected.ID)
+	}
+}
+
+func TestAdaptiveStaleResponseTimeUsesMissingScore(t *testing.T) {
+	servers := []*models.Server{
+		newAdaptiveServer("backend-1", 1),
+		newAdaptiveServer("backend-2", 1),
+	}
+
+	setResponseTime(servers[0], 10)
+
+	cfg := DefaultAdaptiveConfig()
+	cfg.ConnectionsWeight = 0
+	cfg.ResponseTimeWeight = 1
+	cfg.CPUWeight = 0
+	cfg.ResponseTimeStaleAfter = 20 * time.Millisecond
+
+	time.Sleep(50 * time.Millisecond)
+	setResponseTime(servers[1], 20)
+
+	selected := NewAdaptive(cfg).NextServer(servers)
+	if selected == nil {
+		t.Fatal("expected a server, got nil")
+	}
+	if selected.ID != "backend-2" {
+		t.Fatalf("expected backend-2 with fresh response time, got %s", selected.ID)
+	}
+}
+
+func TestAdaptiveMissingResponseTimeUsesMissingScore(t *testing.T) {
+	servers := []*models.Server{
+		newAdaptiveServer("backend-1", 1),
+		newAdaptiveServer("backend-2", 1),
+	}
+
+	_, samples, updatedAt := servers[0].ResponseTimeSnapshot()
+	if samples != 0 || !updatedAt.IsZero() {
+		t.Fatalf("expected missing response time state, got samples=%d updatedAt=%v", samples, updatedAt)
+	}
+	setResponseTime(servers[1], 100)
+
+	cfg := DefaultAdaptiveConfig()
+	cfg.ConnectionsWeight = 0
+	cfg.ResponseTimeWeight = 1
+	cfg.CPUWeight = 0
+
+	selected := NewAdaptive(cfg).NextServer(servers)
+	if selected == nil {
+		t.Fatal("expected a server, got nil")
+	}
+	if selected.ID != "backend-2" {
+		t.Fatalf("expected backend-2 with fresh response time, got %s", selected.ID)
 	}
 }
 

@@ -44,6 +44,17 @@ func TestServerResponseTimeSamples(t *testing.T) {
 	if got := server.ResponseTimeSamples(); got != 2 {
 		t.Fatalf("expected 2 response time samples, got %d", got)
 	}
+
+	value, samples, updatedAt := server.ResponseTimeSnapshot()
+	if value != 60 {
+		t.Fatalf("expected response time EMA 60, got %f", value)
+	}
+	if samples != 2 {
+		t.Fatalf("expected snapshot with 2 response time samples, got %d", samples)
+	}
+	if updatedAt.IsZero() {
+		t.Fatal("expected response time update timestamp")
+	}
 }
 
 func TestServerCPUUtilizationConcurrentAccess(t *testing.T) {

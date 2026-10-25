@@ -8,14 +8,15 @@ import (
 )
 
 type Server struct {
-	ID                string
-	URL               string
-	Weight            int
-	Healthy           bool
-	activeConnections int
-	cpuUtilization    float64
-	cpuUpdatedAt      time.Time
-	responseTime      *metrics.ResponseTime
+	ID                    string
+	URL                   string
+	Weight                int
+	Healthy               bool
+	activeConnections     int
+	cpuUtilization        float64
+	cpuUpdatedAt          time.Time
+	responseTime          *metrics.ResponseTime
+	responseTimeUpdatedAt time.Time
 
 	mu sync.Mutex
 }
@@ -87,7 +88,11 @@ func (s *Server) CPUUpdatedAt() time.Time {
 }
 
 func (s *Server) ObserveResponseTime(duration time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.responseTime.Observe(duration)
+	s.responseTimeUpdatedAt = time.Now()
 }
 
 func (s *Server) ResponseTime() float64 {
@@ -96,4 +101,11 @@ func (s *Server) ResponseTime() float64 {
 
 func (s *Server) ResponseTimeSamples() int64 {
 	return s.responseTime.Count()
+}
+
+func (s *Server) ResponseTimeSnapshot() (float64, int64, time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.responseTime.Value(), s.responseTime.Count(), s.responseTimeUpdatedAt
 }
