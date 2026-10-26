@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "type": "linear",
+  "target": "predicted_latency_ms (lower is better, pick the minimum)",
+  "features": [
+    "in_flight",
+    "ema_ms",
+    "cpu"
+  ],
+  "coefficients": [
+    0.35248801669905394,
+    0.9813450912319232,
+    0.0
+  ],
+  "intercept": 0.5088666569741918,
+  "defaults": {
+    "in_flight": 0.0,
+    "ema_ms": 53.201,
+    "cpu": 0.0
+  },
+  "trained_at": "2026-10-26T04:05:37+00:00",
+  "training_rows": 97225,
+  "test_metrics": {
+    "mae_ms": 2.734819173216366,
+    "rmse_ms": 10.195529085791696,
+    "r2": 0.9702090159799025
+  },
+  "routing_test_mean_ms": {
+    "oracle": 28.528,
+    "random": 76.805,
+    "least_connections": 39.904,
+    "hand_tuned_adaptive": 31.063,
+    "ml_linear_ridge": 29.3,
+    "ml_random_forest": 29.033,
+    "ml_gradient_boosting": 29.066
+  },
+  "notes": [
+    "in_flight = count before adding the new request, ema_ms = milliseconds, cpu = percent 0-100.",
+    "If a server has no response samples yet, use defaults.ema_ms.",
+    "If CPU is stale or missing, use defaults.cpu."
+  ]
+}

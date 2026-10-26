@@ -1,0 +1,4 @@
+data/raw/*.csv
+.venv/
+__pycache__/
+*.joblib
