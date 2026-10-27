@@ -8,16 +8,41 @@ import (
 	"time"
 )
 
+// func TestCheckServerHealthy(t *testing.T) {
+// 	server := &models.Server{
+// 		ID:      "backend-1",
+// 		URL:     "http://localhost:8081",
+// 		Healthy: false,
+// 	}
+
+// 	checker := NewHealthChecker([]*models.Server{server})
+
+// 	checker.checkServer(server)
+// 	if !server.IsHealthy() {
+// 		t.Fatalf("expected server to be healthy")
+// 	}
+// }
+
 func TestCheckServerHealthy(t *testing.T) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Fatalf("expected /health, got %s", r.URL.Path)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testServer.Close()
+
 	server := &models.Server{
 		ID:      "backend-1",
-		URL:     "http://localhost:8081",
+		URL:     testServer.URL,
 		Healthy: false,
 	}
 
 	checker := NewHealthChecker([]*models.Server{server})
 
 	checker.checkServer(server)
+
 	if !server.IsHealthy() {
 		t.Fatalf("expected server to be healthy")
 	}
