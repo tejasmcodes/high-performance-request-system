@@ -11,14 +11,13 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/tejasmcodes/high-performance-request-system/internal/algorithms"
+	"github.com/tejasmcodes/high-performance-request-system/internal/benchmark"
 	"github.com/tejasmcodes/high-performance-request-system/internal/decisionlog"
 	"github.com/tejasmcodes/high-performance-request-system/internal/health"
 	"github.com/tejasmcodes/high-performance-request-system/internal/models"
@@ -215,19 +214,16 @@ func (h *benchmarkProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	server.IncrementConnections()
 	defer server.DecrementConnections()
 
-	target, err := url.Parse(server.URL)
+	var proxyErr error
+	proxy, err := benchmark.NewReverseProxy(server, func(w http.ResponseWriter, r *http.Request, err error) {
+		proxyErr = err
+		log.Printf("proxy error: %v", err)
+		http.Error(w, http.StatusText(http.StatusBadGateway), http.StatusBadGateway)
+	})
 	if err != nil {
 		http.Error(responseWriter, "invalid backend URL", http.StatusInternalServerError)
 		recordDecision(err, false)
 		return
-	}
-
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	var proxyErr error
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		proxyErr = err
-		log.Printf("proxy error: %v", err)
-		http.Error(w, http.StatusText(http.StatusBadGateway), http.StatusBadGateway)
 	}
 
 	start := time.Now()
@@ -319,18 +315,7 @@ func main() {
 }
 
 func selectStrategy(name string) (algorithms.Strategy, error) {
-	switch name {
-	case "round-robin":
-		return &algorithms.RoundRobin{}, nil
-	case "least-connections":
-		return &algorithms.LeastConnections{}, nil
-	case "weighted-round-robin":
-		return &algorithms.WeightedRoundRobin{}, nil
-	case "adaptive":
-		return algorithms.NewAdaptive(algorithms.DefaultAdaptiveConfig()), nil
-	default:
-		return nil, fmt.Errorf("unknown algorithm %q", name)
-	}
+	return benchmark.NewStrategy(name)
 }
 
 func splitCSV(value string) []string {
