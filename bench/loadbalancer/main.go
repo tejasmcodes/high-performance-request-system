@@ -79,6 +79,7 @@ func main() {
 	idsFlag := flag.String("ids", "backend-1,backend-2,backend-3", "comma-separated backend ids")
 	urlsFlag := flag.String("urls", "http://localhost:18081,http://localhost:18082,http://localhost:18083", "comma-separated backend URLs")
 	weightsFlag := flag.String("weights", "3,1,2", "comma-separated static weights")
+	mlModelPath := flag.String("ml-model", "ml/model/model.json", "path to ML Adaptive linear model JSON")
 	verbose := flag.Bool("verbose", false, "enable request logging")
 	flag.Parse()
 
@@ -101,7 +102,7 @@ func main() {
 
 	stats := newSelectionStats(ids)
 
-	base, err := selectStrategy(*algorithm)
+	base, err := selectStrategy(*algorithm, *mlModelPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -151,7 +152,7 @@ func main() {
 	}
 }
 
-func selectStrategy(name string) (algorithms.Strategy, error) {
+func selectStrategy(name, mlModelPath string) (algorithms.Strategy, error) {
 	switch name {
 	case "round-robin":
 		return &algorithms.RoundRobin{}, nil
@@ -159,8 +160,17 @@ func selectStrategy(name string) (algorithms.Strategy, error) {
 		return &algorithms.LeastConnections{}, nil
 	case "weighted-round-robin":
 		return &algorithms.WeightedRoundRobin{}, nil
-	case "adaptive":
+	case "adaptive", "adaptive-v1":
 		return algorithms.NewAdaptive(algorithms.DefaultAdaptiveConfig()), nil
+	case "adaptive-v2":
+		return algorithms.NewAdaptiveV2(algorithms.DefaultAdaptiveV2Config()), nil
+	case "ml-adaptive":
+		fallback := algorithms.NewAdaptiveV2(algorithms.DefaultAdaptiveV2Config())
+		strategy, err := algorithms.NewMLAdaptiveFromFile(mlModelPath, fallback)
+		if err != nil {
+			log.Printf("ML model unavailable; using Adaptive V2 fallback: %v", err)
+		}
+		return strategy, nil
 	default:
 		return nil, fmt.Errorf("unknown algorithm %q", name)
 	}
